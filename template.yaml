@@ -1,0 +1,59 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+    Slack /ch Command
+
+# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
+Globals:
+    Function:
+        Timeout: 30
+
+Parameters:
+    BucketName:
+        Type: String
+    KeyIdParameter:
+        Type: String
+    KmsEncryptedToken:
+        Type: String
+    SlackToken:
+        Type: String
+
+Resources:
+
+    SlackChannelFunction:
+        Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+        Properties:
+            CodeUri: cmd/
+            Handler: app.lambda_handler
+            Runtime: python3.7
+            FunctionName: slack-channels-slash-cmd
+            Policies:
+            - Statement:
+                - Action: kms:Decrypt
+                  Resource:
+                      Fn::Sub:
+                          - arn:${AWS::Partition}:kms:${AWS::Region}:${AWS::AccountId}:key/${keyId}
+                          - keyId:
+                              Ref: KeyIdParameter
+                  Effect: Allow
+            Environment: # More info about Env Vars: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#environment-object
+                Variables:
+                    BUCKET_NAME: !Ref BucketName
+                    KMS_ENCRYPTED_TOKEN: !Ref KmsEncryptedToken
+                    SLACK_TOKEN: !Ref SlackToken
+            Events:
+                SlackChannelList:
+                    Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+                    Properties:
+                        Path: /channels
+                        Method: POST
+
+Outputs:
+
+    SlackChannelApi:
+      Description: "API Gateway endpoint URL for Prod stage for Slack Channel List function"
+      Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/channels"
+
+    SlackChannelFunction:
+      Description: "Slack Channel Lambda Function ARN"
+      Value: !GetAtt SlackChannelFunction.Arn
