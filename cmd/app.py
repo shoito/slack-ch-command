@@ -22,6 +22,9 @@ sc = SlackClient(slack_token)
 cache = {}
 
 def lambda_handler(event, context):
+    if not 'body' in event:
+        return respond('Request body is empty')
+
     params = parse_qs(event['body'])
     token = params['token'][0]
     if token != expected_token:
@@ -41,6 +44,7 @@ def lambda_handler(event, context):
     if 'text' in params:
         command_text = params['text'][0].split(' ')
 
+    logger.info(command_text)
     channels = exec_command(sc, command_text)
     return respond(build_message(channels))
 
@@ -56,7 +60,7 @@ def build_message(channels):
 
     for channel in channels:
         if channel['purpose']['value']:
-            ret = ret + '<#{id}|{name}> - {purpose}\n'.format(id = channel['id'], name = channel['name'], purpose = channel['purpose']['value'])
+            ret = ret + '<#{id}|{name}>\n```{purpose}```\n'.format(id = channel['id'], name = channel['name'], purpose = channel['purpose']['value'].replace('```', ''))
         else:
             ret = ret + '<#{id}|{name}>\n'.format(id = channel['id'], name = channel['name'])
     return ret
@@ -77,13 +81,19 @@ def exec_command(sc, command_text):
     channels = get_channels(sc)
     # /ch list NAME_PREFIX
     if command_text[0] == 'list' and len(command_text) == 2:
-        return list(filter(lambda c : c['name'].startswith(command_text[1]), channels))
+        return filter_prefix(command_text[1], channels)
     # /ch search NAME or PURPOSE
     elif command_text[0] == 'search' and len(command_text) == 2:
-        return list(filter(lambda c : command_text[1] in c['name'] or command_text[1] in c['purpose']['value'], channels))
+        return search(command_text[1], channels)
     # /ch list
     else:
         return channels
+
+def filter_prefix(prefix, channels):
+    return list(filter(lambda c : c['name'].startswith(prefix), channels))
+
+def search(term, channels):
+    return list(filter(lambda c : term in c['name'] or term in c['purpose']['value'] or term in c['topic']['value'], channels))
 
 def list_channels(client):
     channels = []
@@ -105,7 +115,6 @@ def list_channels(client):
                 limit = 200,
                 cursor = next_cursor
             )
-            logger.info('api_response: ' + json.dumps(api_channels))
 
             if api_channels['ok']:
                 channels = channels + api_channels['channels']
