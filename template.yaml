@@ -7,6 +7,9 @@ Description: >
 Globals:
     Function:
         Timeout: 30
+        Environment:
+            Variables:
+                PYTHONPATH: /var/runtime:/var/task/site-packages
 
 Parameters:
     BucketName:
@@ -36,11 +39,13 @@ Resources:
                           - keyId:
                               Ref: KeyIdParameter
                   Effect: Allow
+            - Statement:
+                - Action: lambda:InvokeFunction
+                  Resource: '*'
+                  Effect: Allow
             Environment: # More info about Env Vars: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#environment-object
                 Variables:
-                    BUCKET_NAME: !Ref BucketName
                     KMS_ENCRYPTED_TOKEN: !Ref KmsEncryptedToken
-                    SLACK_TOKEN: !Ref SlackToken
             Events:
                 SlackChannelList:
                     Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
@@ -48,12 +53,13 @@ Resources:
                         Path: /channels
                         Method: POST
 
-Outputs:
-
-    SlackChannelApi:
-      Description: "API Gateway endpoint URL for Prod stage for Slack Channel List function"
-      Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/channels"
-
-    SlackChannelFunction:
-      Description: "Slack Channel Lambda Function ARN"
-      Value: !GetAtt SlackChannelFunction.Arn
+    SlackExecCommandFunction:
+        Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+        Properties:
+            CodeUri: cmd/
+            Handler: ch.lambda_handler
+            Runtime: python3.7
+            FunctionName: slack-channels-slash-cmd-exec
+            Environment: # More info about Env Vars: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#environment-object
+                Variables:
+                    SLACK_TOKEN: !Ref SlackToken
